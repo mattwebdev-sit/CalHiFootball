@@ -119,6 +119,7 @@ export function LeaguesBrowser({
                       <li key={l.slug}>
                         <Link
                           href={`/leagues/${l.slug}`}
+                          prefetch={false}
                           className="flex items-center justify-between rounded px-2 py-2 text-sm text-neutral-200 hover:bg-white/5 hover:text-emerald-300"
                         >
                           <span>{l.name}</span>

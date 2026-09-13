@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { prisma } from "@/lib/db";
 import { DEFAULT_FORMAT, TeamFormat } from "@/lib/config";
 import { effectiveMargin } from "@/lib/ratings/engine";
@@ -193,7 +194,7 @@ export interface LeaguePage {
 }
 
 /** A league's ranked teams (statewide + section rank) for its page. */
-export async function getLeaguePage(
+export const getLeaguePage = cache(async function getLeaguePage(
   slug: string,
   season: number
 ): Promise<LeaguePage | null> {
@@ -216,7 +217,7 @@ export async function getLeaguePage(
     format: league.format,
     teams,
   };
-}
+});
 
 export async function getAllLeagueSlugs(): Promise<string[]> {
   const leagues = await prisma.league.findMany({ select: { slug: true } });
@@ -370,7 +371,7 @@ export interface TeamPage {
   games: TeamGame[];
 }
 
-export async function getTeamPage(
+export const getTeamPage = cache(async function getTeamPage(
   slug: string,
   season: number
 ): Promise<TeamPage | null> {
@@ -384,24 +385,55 @@ export async function getTeamPage(
   });
   if (!team) return null;
 
-  const ranks = await rankLookup(season);
+  const snap = team.ratings[0];
+
+  // Everything below only depends on `team`, so fire it all off in parallel
+  // (one combined snapshot scan for both rank + rating, the games, and the two
+  // rank counts) instead of the previous 5 sequential round-trips.
+  const [snapshots, games, sectionRankCount, leagueRankCount] = await Promise.all([
+    prisma.ratingSnapshot.findMany({
+      where: { season },
+      select: { teamId: true, rank: true, rating: true },
+    }),
+    prisma.game.findMany({
+      where: {
+        season,
+        OR: [{ homeTeamId: team.id }, { awayTeamId: team.id }],
+      },
+      orderBy: [{ date: "asc" }],
+      include: {
+        homeTeam: { include: { section: true } },
+        awayTeam: { include: { section: true } },
+      },
+    }),
+    snap?.rank != null
+      ? prisma.ratingSnapshot.count({
+          where: {
+            season,
+            rank: { not: null, lte: snap.rank },
+            team: { format: team.format, sectionId: team.sectionId },
+          },
+        })
+      : Promise.resolve<number | null>(null),
+    snap?.rank != null && team.leagueId
+      ? prisma.ratingSnapshot.count({
+          where: {
+            season,
+            rank: { not: null, lte: snap.rank },
+            team: { format: team.format, leagueId: team.leagueId },
+          },
+        })
+      : Promise.resolve<number | null>(null),
+  ]);
+
+  const ranks = new Map<string, number>();
   const ratingByTeam = new Map<string, number>();
-  const allRatings = await prisma.ratingSnapshot.findMany({
-    where: { season },
-    select: { teamId: true, rating: true },
-  });
-  for (const r of allRatings) ratingByTeam.set(r.teamId, r.rating);
+  for (const s of snapshots) {
+    if (s.rank != null) ranks.set(s.teamId, s.rank);
+    ratingByTeam.set(s.teamId, s.rating);
+  }
 
-  const games = await prisma.game.findMany({
-    where: {
-      season,
-      OR: [{ homeTeamId: team.id }, { awayTeamId: team.id }],
-    },
-    orderBy: [{ date: "asc" }],
-    include: { homeTeam: { include: { section: true } }, awayTeam: { include: { section: true } } },
-  });
-
-  const teamRating = team.ratings[0]?.rating ?? null;
+  const teamRating = snap?.rating ?? null;
 
   const teamGames: TeamGame[] = games.map((g) => {
     const isHome = g.homeTeamId === team.id;
@@ -455,32 +487,9 @@ export async function getTeamPage(
     };
   });
 
-  const snap = team.ratings[0];
-
-  // Section rank = position within the team's section+format, ordered by rating
-  // (which is the statewide rank order), i.e. how many ranked section peers have
-  // an equal-or-better statewide rank.
-  let sectionRank: number | null = null;
-  let leagueRank: number | null = null;
-  if (snap?.rank != null) {
-    sectionRank = await prisma.ratingSnapshot.count({
-      where: {
-        season,
-        rank: { not: null, lte: snap.rank },
-        team: { format: team.format, sectionId: team.sectionId },
-      },
-    });
-    if (team.leagueId) {
-      leagueRank = await prisma.ratingSnapshot.count({
-        where: {
-          season,
-          rank: { not: null, lte: snap.rank },
-          team: { format: team.format, leagueId: team.leagueId },
-        },
-      });
-    }
-  }
-
+  // Section/league rank = position within the team's section/league+format,
+  // ordered by rating (i.e. how many ranked peers have an equal-or-better
+  // statewide rank). Computed in parallel above.
   return {
     slug: team.slug,
     name: team.name,
@@ -494,15 +503,15 @@ export async function getTeamPage(
     format: team.format,
     rating: snap?.rating ?? null,
     rank: snap?.rank ?? null,
-    sectionRank,
-    leagueRank,
+    sectionRank: sectionRankCount,
+    leagueRank: leagueRankCount,
     sos: snap?.sos ?? null,
     wins: snap?.wins ?? 0,
     losses: snap?.losses ?? 0,
     ties: snap?.ties ?? 0,
     games: teamGames,
   };
-}
+});
 
 export async function getAllTeamSlugs(): Promise<string[]> {
   const teams = await prisma.team.findMany({ select: { slug: true } });

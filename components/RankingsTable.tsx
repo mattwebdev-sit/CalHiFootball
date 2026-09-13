@@ -42,6 +42,7 @@ export function RankingsTable({
                 {!compact && t.leagueName && t.leagueSlug ? (
                   <Link
                     href={`/leagues/${t.leagueSlug}`}
+                    prefetch={false}
                     className="hover:text-emerald-300"
                   >
                     {t.leagueName}
@@ -91,6 +92,7 @@ export function RankingsTable({
                     <div className="text-xs text-neutral-600">
                       <Link
                         href={`/leagues/${t.leagueSlug}`}
+                        prefetch={false}
                         className="hover:text-emerald-300"
                       >
                         {t.leagueName}

@@ -13,7 +13,11 @@ import {
 } from "@/lib/format";
 import { TeamLink } from "@/components/TeamLink";
 
-export const dynamic = "force-dynamic";
+// ISR: render on first request, then serve from cache and refresh at most once
+// an hour (stale-while-revalidate). Ratings/scores only change when the ingest
+// runs, so this turns every navigation/prefetch into a cheap cached hit instead
+// of ~6 cross-region Turso queries.
+export const revalidate = 3600;
 
 export async function generateMetadata({
   params,

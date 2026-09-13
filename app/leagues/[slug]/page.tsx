@@ -12,7 +12,9 @@ import { Scoreboard } from "@/components/Scoreboard";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import type { TeamFormat } from "@/lib/config";
 
-export const dynamic = "force-dynamic";
+// ISR: cache the rendered league page and refresh at most hourly. See the team
+// page for rationale — avoids re-querying Turso on every prefetch/navigation.
+export const revalidate = 3600;
 
 export async function generateMetadata({
   params,
