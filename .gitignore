@@ -34,3 +34,4 @@ next-env.d.ts
 
 # raw ingest cache
 /data/raw/
+.vercel

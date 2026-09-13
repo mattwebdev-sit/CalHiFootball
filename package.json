@@ -18,6 +18,7 @@
     "classify": "tsx scripts/classify-format.ts",
     "cleanup:teams": "tsx scripts/cleanup-teams.ts",
     "purge:seed": "tsx scripts/purge-seed.ts",
+    "load:turso": "tsx scripts/load-turso.ts",
     "test": "vitest run"
   },
   "prisma": {
