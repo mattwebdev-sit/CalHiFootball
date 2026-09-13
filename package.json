@@ -1,0 +1,46 @@
+{
+  "name": "calhifootball",
+  "version": "0.1.0",
+  "private": true,
+  "description": "California high school football power ratings and rankings.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "postinstall": "prisma generate",
+    "prisma:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:reset": "prisma db push --force-reset",
+    "seed": "tsx prisma/seed.ts",
+    "ingest": "tsx scripts/ingest.ts",
+    "rate": "tsx scripts/rate.ts",
+    "classify": "tsx scripts/classify-format.ts",
+    "cleanup:teams": "tsx scripts/cleanup-teams.ts",
+    "purge:seed": "tsx scripts/purge-seed.ts",
+    "test": "vitest run"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.18.0",
+    "@prisma/adapter-libsql": "^6.19.3",
+    "@prisma/client": "^6.1.0",
+    "next": "^16.3.5",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "prisma": "^6.1.0",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

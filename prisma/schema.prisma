@@ -1,0 +1,115 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// A CIF section (or "OOS" bucket for out-of-state opponents).
+model Section {
+  id        String   @id @default(cuid())
+  /// Short stable code, e.g. "SS", "SDS", "NCS", "CCS", "SJS", "CS", "LACS", "SFS", "OS", "NS", "OOS".
+  code      String   @unique
+  name      String
+  /// True for real CA CIF sections that appear in the CA rankings table.
+  isCa      Boolean  @default(true)
+  teams     Team[]
+  leagues   League[]
+  createdAt DateTime @default(now())
+}
+
+/// A league/conference within a CIF section. Leagues are format-specific
+/// (8-man and 11-man sections have separate leagues). Sourced from SBLive's
+/// LEAGUE child organizations.
+model League {
+  id        String   @id @default(cuid())
+  /// SBLive org slug, globally unique, e.g. "31503-central-yosemite-conference".
+  slug      String   @unique
+  name      String
+  sectionId String
+  section   Section  @relation(fields: [sectionId], references: [id])
+  /// "eleven" (11-man) or "eight" (8-man).
+  format    String   @default("eleven")
+  teams     Team[]
+  createdAt DateTime @default(now())
+
+  @@index([sectionId])
+  @@index([format])
+}
+
+model Team {
+  id         String   @id @default(cuid())
+  /// URL-safe unique identifier, e.g. "st-john-bosco-bellflower".
+  slug       String   @unique
+  name       String
+  city       String?
+  mascot     String?
+  sectionId  String
+  section    Section  @relation(fields: [sectionId], references: [id])
+  /// True if this team plays outside California and should be excluded from CA rankings.
+  isOutOfState Boolean @default(false)
+  /// Game format: "eleven" (11-man) or "eight" (8-man). These are ranked as
+  /// entirely separate competitions.
+  format     String   @default("eleven")
+  /// League/conference within the section. Null means Independent/Unaffiliated
+  /// (not listed in any SBLive league roster).
+  leagueId   String?
+  league     League?  @relation(fields: [leagueId], references: [id])
+  homeGames  Game[]   @relation("HomeTeam")
+  awayGames  Game[]   @relation("AwayTeam")
+  ratings    RatingSnapshot[]
+  createdAt  DateTime @default(now())
+
+  @@index([sectionId])
+  @@index([format])
+  @@index([leagueId])
+}
+
+model Game {
+  id         String   @id @default(cuid())
+  season     Int
+  /// Season week number (1-based) if known.
+  week       Int?
+  date       DateTime
+  homeTeamId String
+  awayTeamId String
+  homeTeam   Team     @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam   Team     @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  homeScore  Int?
+  awayScore  Int?
+  /// "scheduled" | "final" | "forfeit" | "canceled" | "postponed"
+  status     String   @default("scheduled")
+  /// Data provenance, e.g. "cifss", "csv:2026-week3", "seed".
+  source     String   @default("seed")
+  /// External id from the source, used for idempotent upserts.
+  sourceId   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([season, date, homeTeamId, awayTeamId])
+  @@index([season])
+  @@index([status])
+}
+
+/// A computed rating for a team for a given season snapshot.
+model RatingSnapshot {
+  id        String   @id @default(cuid())
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id])
+  season    Int
+  /// CalHi power rating (points relative to an average team at 0).
+  rating    Float
+  /// Statewide rank among CA teams (null for out-of-state teams).
+  rank      Int?
+  /// Strength of schedule: average opponent rating.
+  sos       Float    @default(0)
+  wins      Int      @default(0)
+  losses    Int      @default(0)
+  ties      Int      @default(0)
+  computedAt DateTime @default(now())
+
+  @@unique([teamId, season])
+  @@index([season])
+}
