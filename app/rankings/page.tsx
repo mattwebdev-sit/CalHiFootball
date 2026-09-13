@@ -18,12 +18,19 @@ export const metadata: Metadata = {
     "Full statewide CalHi power ratings for California high school football, split by 8-man and 11-man competition and filterable by CIF section and league.",
 };
 
+const PAGE_SIZE = 100;
+
 export default async function RankingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ section?: string; format?: string; league?: string }>;
+  searchParams: Promise<{
+    section?: string;
+    format?: string;
+    league?: string;
+    page?: string;
+  }>;
 }) {
-  const { section, format: formatParam, league } = await searchParams;
+  const { section, format: formatParam, league, page: pageParam } = await searchParams;
   const format = normalizeFormat(formatParam);
   const [teams, sections, sectionLeagues] = await Promise.all([
     getRankings(CURRENT_SEASON, { section, format, league }),
@@ -37,6 +44,22 @@ export default async function RankingsPage({
   const activeSectionLeagues = section
     ? sectionLeagues.find((s) => s.code === section)
     : undefined;
+
+  // Paginate so we only render ~100 rows per request instead of 1,000+.
+  const totalPages = Math.max(1, Math.ceil(teams.length / PAGE_SIZE));
+  const currentPage = Math.min(
+    Math.max(1, Number(pageParam) || 1),
+    totalPages
+  );
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageTeams = teams.slice(start, start + PAGE_SIZE);
+  const pageHref = (p: number) => {
+    const sp = new URLSearchParams({ format });
+    if (section) sp.set("section", section);
+    if (league) sp.set("league", league);
+    if (p > 1) sp.set("page", String(p));
+    return `/rankings?${sp.toString()}`;
+  };
 
   const sectionOptions = [
     { label: "All CA sections", value: `/rankings?format=${format}` },
@@ -75,6 +98,12 @@ export default async function RankingsPage({
           ranked as separate competitions. The rank shown is the statewide rank
           within the selected format, even when filtered by section or league.
         </p>
+        {teams.length > PAGE_SIZE ? (
+          <p className="mt-1 text-xs text-neutral-500">
+            Showing {start + 1}&ndash;{Math.min(start + PAGE_SIZE, teams.length)} of{" "}
+            {teams.length}.
+          </p>
+        ) : null}
       </div>
 
       <FormatTabs active={format} hrefFor={(f) => `/rankings?format=${f}`} />
@@ -127,8 +156,86 @@ export default async function RankingsPage({
         </>
       ) : null}
 
-      <RankingsTable teams={teams} />
+      <RankingsTable teams={pageTeams} />
+
+      {totalPages > 1 ? (
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          hrefFor={pageHref}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function Pagination({
+  currentPage,
+  totalPages,
+  hrefFor,
+}: {
+  currentPage: number;
+  totalPages: number;
+  hrefFor: (page: number) => string;
+}) {
+  // Compact window of page numbers around the current page.
+  const pages: number[] = [];
+  const from = Math.max(1, currentPage - 2);
+  const to = Math.min(totalPages, currentPage + 2);
+  for (let p = from; p <= to; p++) pages.push(p);
+
+  const btn =
+    "rounded px-3 py-1.5 text-sm font-medium tabular-nums bg-neutral-800 text-neutral-300 hover:bg-neutral-700";
+  const active = "rounded px-3 py-1.5 text-sm font-bold tabular-nums bg-emerald-600 text-white";
+  const disabled = "rounded px-3 py-1.5 text-sm font-medium text-neutral-600";
+
+  return (
+    <nav
+      aria-label="Rankings pagination"
+      className="flex flex-wrap items-center justify-center gap-1 pt-2"
+    >
+      {currentPage > 1 ? (
+        <Link href={hrefFor(currentPage - 1)} className={btn}>
+          &larr; Prev
+        </Link>
+      ) : (
+        <span className={disabled}>&larr; Prev</span>
+      )}
+
+      {from > 1 ? (
+        <>
+          <Link href={hrefFor(1)} className={btn}>
+            1
+          </Link>
+          {from > 2 ? <span className="px-1 text-neutral-600">&hellip;</span> : null}
+        </>
+      ) : null}
+
+      {pages.map((p) => (
+        <Link key={p} href={hrefFor(p)} className={p === currentPage ? active : btn}>
+          {p}
+        </Link>
+      ))}
+
+      {to < totalPages ? (
+        <>
+          {to < totalPages - 1 ? (
+            <span className="px-1 text-neutral-600">&hellip;</span>
+          ) : null}
+          <Link href={hrefFor(totalPages)} className={btn}>
+            {totalPages}
+          </Link>
+        </>
+      ) : null}
+
+      {currentPage < totalPages ? (
+        <Link href={hrefFor(currentPage + 1)} className={btn}>
+          Next &rarr;
+        </Link>
+      ) : (
+        <span className={disabled}>Next &rarr;</span>
+      )}
+    </nav>
   );
 }
 
