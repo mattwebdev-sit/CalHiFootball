@@ -34,4 +34,7 @@ next-env.d.ts
 
 # raw ingest cache
 /data/raw/
+
+# one-off Turso seed dump (contains a full data copy)
+/turso-seed.sql
 .vercel

@@ -12,28 +12,20 @@ or the live Turso DB (prod), just by toggling env vars.
 
 ## One-time setup
 
-### 1. Create the Turso database (seeded from your local data)
+### 1. Turso database — ALREADY PROVISIONED ✅
 
-Install the Turso CLI and sign up (free tier is plenty):
+The production database is already created and loaded with all current data
+(12 sections, 236 leagues, 1,298 teams, 5,986 games, 1,298 rating snapshots),
+in the `aws-us-west-2` (Oregon) region.
 
-```powershell
-# Windows (PowerShell) — see https://docs.turso.tech/cli/installation for options
-irm https://get.tur.so/install.ps1 | iex
-turso auth signup    # or: turso auth login
-```
+- `TURSO_DATABASE_URL` = `libsql://calhifootball-mattwebdev-sit.aws-us-west-2.turso.io`
+- `TURSO_AUTH_TOKEN` = saved locally in `.env.turso.local` (gitignored)
 
-Create the DB directly from your current local SQLite file. This copies the
-schema **and** all ~2.5 MB of ingested data in one shot:
+To re-load from your local DB later (rarely needed):
 
 ```powershell
-turso db create calhifootball --from-file prisma/dev.db
-```
-
-Grab the connection details (save these — you'll paste them into Vercel):
-
-```powershell
-turso db show calhifootball --url          # -> TURSO_DATABASE_URL (libsql://...)
-turso db tokens create calhifootball       # -> TURSO_AUTH_TOKEN
+cmd /c "sqlite3 prisma\dev.db .dump > turso-seed.sql"
+npm run load:turso        # reads TURSO_* from your environment
 ```
 
 ### 2. Put the project in git and deploy to Vercel
